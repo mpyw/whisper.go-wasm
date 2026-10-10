@@ -10,7 +10,7 @@ whisper.cpp compiled to wasm32-wasip1-threads and translated to Go by wasm2go, f
 - `module.go` and `version.go` are build outputs, ignored on branches. Only a release tag carries them, so the Go package builds only after `scripts/` ran.
 - Release only through the `build` workflow. Never tag by hand, and never move, delete or reuse a pushed tag. The module proxy and the checksum database keep every version forever.
 - main takes ordinary commits and pull requests. Never rewrite it: `module.go` is never on a branch, so main's history stays small without that.
-- Any change to ABI.md bumps `ABIVersion`, and whisper.go's `hostABIVersion` must follow.
+- A change to what ABI.md asks of the module or the host bumps `ABIVersion`, and whisper.go's `hostABIVersion` must follow. A line that states what both already do bumps nothing.
 - A change of what goes into `module.go` reruns `scripts/licenses.sh`, and updates README's license table.
 
 ## Skills
