@@ -1,0 +1,32 @@
+diff --git a/ggml/src/ggml-cpu/ops.cpp b/ggml/src/ggml-cpu/ops.cpp
+index 16a916d..8718954 100644
+--- a/ggml/src/ggml-cpu/ops.cpp
++++ b/ggml/src/ggml-cpu/ops.cpp
+@@ -5810,6 +5810,14 @@ void ggml_compute_forward_diag_mask_zero(
+ 
+ // ggml_compute_forward_soft_max
+ 
++#if defined(__wasi__)
++// WHISPERGO: the Go host runs the softmax of a row, where it has SIMD and
++// wasm2go has none: it took 15% of the time, most of it in expf.
++// whisper.go-wasm's ABI.md lists this import.
++extern "C" __attribute__((import_module("env"), import_name("gw_soft_max")))
++void gw_soft_max(int n, float * dst, const float * src, const void * mask, int mask_f16, float scale, float slope);
++#endif
++
+ static void ggml_compute_forward_soft_max_f32(
+         const ggml_compute_params * params,
+               ggml_tensor * dst) {
+@@ -5872,6 +5880,12 @@ static void ggml_compute_forward_soft_max_f32(
+                 ggml_fp16_t * mp_f16 = src1 ? (ggml_fp16_t *)((char *) src1->data + i11*nb11 + i12*nb12 + i13*nb13) : NULL;
+                 float       * mp_f32 = src1 ? (float       *)((char *) src1->data + i11*nb11 + i12*nb12 + i13*nb13) : NULL;
+ 
++#if defined(__wasi__) // WHISPERGO: see gw_soft_max. Sinks stay here.
++                if (!sk) {
++                    gw_soft_max((int) ne00, dp, sp, src1 ? (const void *) mp_f32 : nullptr, use_f16, scale, slope);
++                    continue;
++                }
++#endif
+                 ggml_vec_cpy_f32  (ne00, wp, sp);
+                 ggml_vec_scale_f32(ne00, wp, scale);
+                 if (mp_f32) {

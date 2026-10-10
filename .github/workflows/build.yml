@@ -1,0 +1,146 @@
+# CI: every push and pull request builds the module from scratch and tests
+# it.
+#
+# CD: run it by hand on main with a version, and it releases that build. The
+# release is an orphan commit of the sources and the generated Go, and only
+# its tag is pushed. Branches never hold module.go, so the repository grows
+# with releases only, and a clone of main stays small.
+name: build
+
+on:
+  push:
+    branches: ["**"]
+    paths-ignore: ["**.md", ".github/assets/**"]
+  pull_request:
+    paths-ignore: ["**.md", ".github/assets/**"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, such as v0.0.0"
+        required: true
+
+concurrency:
+  group: ${{ github.event_name == 'workflow_dispatch' && 'release' || format('build-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Before the build, which takes a while.
+      - name: Check the release
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "Release from main, not $GITHUB_REF." >&2
+            exit 1
+          fi
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "$VERSION is not a semantic version such as v0.0.0." >&2
+            exit 1
+          fi
+          # Go caches a version forever, so a tag is never reused.
+          if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" > /dev/null; then
+            echo "$VERSION exists already." >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Cache toolchains
+        uses: actions/cache@v6
+        with:
+          path: .tools
+          key: tools-${{ runner.os }}-${{ hashFiles('scripts/env.sh') }}
+
+      - name: Fetch
+        run: scripts/fetch.sh
+
+      - name: Build
+        run: scripts/build.sh
+
+      - name: Test
+        run: go vet ./... && go test ./...
+
+      - uses: jdx/mise-action@v4
+
+      - name: Lint
+        run: mise exec -- declscope ./...
+
+      - name: Upload the generated Go
+        uses: actions/upload-artifact@v7
+        with:
+          name: generated
+          if-no-files-found: error
+          path: |
+            module.go
+            version.go
+
+  # Only this job may write, and only when run by hand.
+  release:
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: generated
+
+      - name: Tag an orphan commit of the sources and the generated Go
+        run: |
+          source="$(git rev-parse HEAD)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          # The index keeps the sources. The generated files are ignored on branches.
+          git checkout -q --orphan release
+          git add -f -- module.go version.go
+          git commit -q -m "whisper.go-wasm $VERSION" \
+            -m "Built from $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$source"
+          git tag "$VERSION"
+          git push origin "refs/tags/$VERSION"
+          git show --stat --format='%H %s' HEAD | tail -15
+
+      # The title names whisper.cpp's version, which the module's does not.
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          whisper="$(sed -n 's/^const WhisperVersion = "\(.*\)"$/\1/p' version.go)"
+          abi="$(sed -n 's/^const ABIVersion = \([0-9]*\)$/\1/p' whisperwasm.go)"
+          {
+            echo "whisper.cpp $whisper, compiled to wasm32-wasip1-threads and translated to Go, for [whisper.go](https://github.com/mpyw/whisper.go)."
+            echo
+            echo '```sh'
+            echo "go get github.com/mpyw/whisper.go-wasm@$VERSION"
+            echo '```'
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| \`WhisperVersion\` | \`$whisper\` |"
+            echo "| \`ABIVersion\` | \`$abi\` |"
+            echo "| Source commit | [${GITHUB_SHA::7}]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA) |"
+            echo
+            echo "> [!WARNING]"
+            echo "> This is an experiment. The ABI and the Go API will change."
+            echo
+            # README's table of every version inside, as a section of its own.
+            sed -n '/^### Versions inside/,/^## /p' README.md | sed '$d' | sed 's/^### /## /'
+          } > "$RUNNER_TEMP/notes.md"
+          gh release create "$VERSION" --verify-tag \
+            --title "$VERSION (whisper.cpp $whisper)" --notes-file "$RUNNER_TEMP/notes.md"

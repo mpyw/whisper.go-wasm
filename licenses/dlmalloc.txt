@@ -1,0 +1,1 @@
+dlmalloc, wasi-libc's malloc, is CC0. See the notice in https://raw.githubusercontent.com/WebAssembly/wasi-libc/2e6fb9d8ee0cdf9e431fbcabe8af3115de000a13/dlmalloc/src/malloc.c
