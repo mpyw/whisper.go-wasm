@@ -48,3 +48,6 @@ description: Change whisper.cpp for whisper.go-wasm, through patches/. Use befor
 | Chunks of 64 by 64 | The threads could not share so few chunks evenly. q5_1 with 8 threads took 0.48 s, and 0.39 s with 32. Chunks of 64 columns were slower with 16 or 24 rows than with 32. |
 | Converting F16's float32 columns to float16 for the host | ggml did it in scalar code, and the host converted them back. `gw_f32_columns` passes them as they are. The host's copy must be vector code: a scalar one took 35% of the time. |
 | Leaving softmax and the quantization of activations in the module | They were 15% and 7% of the time, in scalar code. `gw_soft_max` and `gw_quantize_row` run them on the host. The quantization must match ggml's to the bit, since its results feed every quantized product. |
+| Moving another op to the host after v0.1.0 | With q5_1 and one thread, the host's kernels took 81% of the time. No op left in the module took above 3%: the mel spectrogram, add, the F16 copies, gelu, the logits. Each would cost an ABI change. |
+| Float32 attention in the encoder, without its casts to F16 | 1.508 s became 1.496 s with one thread, and nothing changed with 8: about 1%, for an ABI change. |
+| A persistent ggml threadpool, through `ggml_backend_cpu_set_threadpool` | A run spawns 224 threads, which cost about 1%. The pool was no faster, and took about 12% more CPU. |
