@@ -32,4 +32,10 @@ Every version is pinned in `scripts/env.sh`.
 
 4. Run `scripts/licenses.sh`. It takes wasi-libc's and LLVM's texts from the commits wasi-sdk pins. A license that changed shows in `git diff licenses/`.
 5. Update README's "Versions inside" table.
-6. Run whisper.go's tests against this checkout, then release as a patch version (release skill).
+6. Run whisper.go's tests against this checkout, then release (release skill): a patch version, or a minor one if a new WASI import changed the ABI.
+
+## Rejected designs
+
+| Idea | Why not |
+| --- | --- |
+| Pinning binaryen, as gophper-wasm does | clang runs any `wasm-opt` on PATH after linking, so the output depended on the machine. `scripts/build.sh` passes `--no-wasm-opt` instead. With tiny.en q5_1 and 8 threads, wasm-opt changed 3.03 s to 3.0 s, and it strips the names wasm2go uses for the Go methods. |

@@ -21,4 +21,5 @@ ABI.md is the whole contract. `whisperwasm.ABIVersion` numbers it, and whisper.g
 | Idea | Why not |
 | --- | --- |
 | Reading the initial memory size from the wasm in the host | `version.go`'s `InitialPages` carries it. `scripts/build.sh` writes it from the same `INITIAL_MEMORY` it links with. |
-| Letting whisper.cpp's language detection run with an English-only model | It costs one more pass of the encoder, for a known answer. `gw_full` passes `en` for such a model when the language is empty. |
+| Letting whisper.cpp's language detection run with an English-only model | It costs one more pass of the encoder, for a known answer. `gw_full` passes `en` for such a model when the language is empty or `auto`. |
+| One import per element, for the kernels | A call would cost more than the work. The host is called once per block of a matrix product. |

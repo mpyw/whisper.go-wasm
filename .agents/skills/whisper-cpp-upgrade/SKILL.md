@@ -26,7 +26,7 @@ description: Move whisper.go-wasm to a new whisper.cpp release, such as v1.9.5 t
    | Where | What to check |
    | --- | --- |
    | `try`, `catch` and `throw` in the files built | A new one fails the build under `-fno-exceptions`. Rewrite it as `patches/0002` does: `grep -rnE '\b(try\|catch\|throw)\b' whisper.cpp/src whisper.cpp/ggml/src` |
-   | `ggml/src/ggml-cpu/ggml-cpu.c` (`patches/0001`) | Whether ggml still forces one thread on `__wasi__` |
+   | `ggml/src/ggml-cpu/ggml-cpu.c` (`patches/0001`) | Whether ggml still forces one thread on `__wasi__`, and whether `ggml_compute_forward_mul_mat_one_chunk` still indexes its blocks as the tile call copies |
    | `ggml_graph_compute_helper` in `src/whisper.cpp` (`patches/0002`) | Whether every graph still gets `abort_callback`. whisper.go's `TestTranscribeCanceled` fails if not. |
    | `include/whisper.h` | The functions `compat/whisper_go.cpp` calls. A changed signature changes the ABI. |
    | `.build/make.log` | New warnings about atomics or threads |

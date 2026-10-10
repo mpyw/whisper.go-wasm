@@ -27,10 +27,26 @@ func (m *testMemory) Grow(delta, _ int64) int64 {
 	return old
 }
 
-type testEnv struct{ mem *testMemory }
+type testEnv struct {
+	mem *testMemory
+	t   *testing.T
+}
 
 func (e testEnv) Xmemory() whisperwasm.Memory { return e.mem }
-func (e testEnv) Xgw_aborted() int32         { return 0 }
+func (e testEnv) Xgw_aborted() int32          { return 0 }
+
+// The kernels are not reached: rejecting a model computes nothing.
+func (e testEnv) Xgw_mul_mat_tile(int32, int32, int32, int32, int32, int32, int32, int32, int32) {
+	e.t.Error("gw_mul_mat_tile called")
+}
+
+func (e testEnv) Xgw_quantize_row(int32, int32, int32, int32) {
+	e.t.Error("gw_quantize_row called")
+}
+
+func (e testEnv) Xgw_soft_max(int32, int32, int32, int32, int32, float32, float32) {
+	e.t.Error("gw_soft_max called")
+}
 
 // testWASI fails every call. Loading a model that is not one reaches none
 // of them but the clock and the log.
@@ -69,7 +85,7 @@ func TestModule(t *testing.T) {
 	if mem.Grow(whisperwasm.InitialPages, 0) != 0 {
 		t.Fatal("cannot grow the test memory")
 	}
-	m := whisperwasm.New(testEnv{mem}, testWASI{t}, testThreads{t})
+	m := whisperwasm.New(testEnv{mem, t}, testWASI{t}, testThreads{t})
 	m.X_initialize()
 
 	junk := []byte("not a ggml model")

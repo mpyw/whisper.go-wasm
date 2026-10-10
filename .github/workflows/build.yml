@@ -72,6 +72,11 @@ jobs:
       - name: Test
         run: go vet ./... && go test ./...
 
+      - uses: jdx/mise-action@v4
+
+      - name: Lint
+        run: mise exec -- declscope ./...
+
       - name: Upload the generated Go
         uses: actions/upload-artifact@v7
         with:

@@ -16,7 +16,7 @@ import (
 // functions it exports and imports, its memory, and the constants both
 // sides share. ABI.md lists them. It changes whenever any of them does, and
 // the host refuses a module with another ABIVersion.
-const ABIVersion = 1
+const ABIVersion = 2
 
 // Licenses holds the license of each component of module.go, as
 // <component>.txt. Whoever distributes it must pass these on. README.md

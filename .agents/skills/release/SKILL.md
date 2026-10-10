@@ -9,7 +9,7 @@ Only the `build` workflow releases. It builds and tests from scratch, makes an *
 
 ## Steps
 
-1. Push the sources to main. For now main is one commit: `git commit --amend` and `git push --force`.
+1. Push the sources to main, as ordinary commits or a merged pull request.
 2. Pick the version. The workflow also publishes a GitHub release titled `vX.Y.Z (whisper.cpp x.y.z)`. Never reuse one that was pushed.
 
    | Change since the last release | Bump |
@@ -36,6 +36,7 @@ Only the `build` workflow releases. It builds and tests from scratch, makes an *
 | Idea | Why not |
 | --- | --- |
 | `module.go` built on a developer's Mac and committed by hand | Nothing would prove it came from the committed sources. CI builds it instead. |
-| Committing `module.go` to main on every push | 8.5 MB, and nearly every line changes with each rebuild, so each change would add about 1.2 MB compressed. A release tag carries it instead, on an orphan commit. |
+| Committing `module.go` to main on every push | About 10 MB, and nearly every line changes with each rebuild, so each change would add over 1 MB compressed. A release tag carries it instead, on an orphan commit. |
 | Release tags on commits that main contains | A clone would still fetch every release's `module.go` through main's history. Orphan commits keep it out of branches. |
 | A separate generator run by `go generate` in whisper.go | `go install` and `go get` never run it, so users would need wasi-sdk, CMake and wasm2go. |
+| Keeping main at one commit, amended and force-pushed | It saved nothing: `module.go` is never on a branch, so main's history is small anyway. It also broke as soon as a pull request was merged. |
