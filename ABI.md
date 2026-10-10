@@ -4,7 +4,8 @@ The contract between this module and its Go host, [whisper.go](https://github.co
 `whisperwasm.ABIVersion` numbers it.
 
 > [!IMPORTANT]
-> Change `ABIVersion` whenever anything on this page changes.
+> Change `ABIVersion` whenever what this page asks of the module or the host changes.
+> A line that only states what both already do changes nothing.
 > Then update the host to match. It refuses a module with another `ABIVersion`.
 
 ## The module
