@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src=".github/assets/icon.png" width="200" alt="A Go gopher in a glowing visor, cupping a paw to its ear, listening to sound waves">
+
 # whisper.go-wasm
 
 whisper.cpp, compiled to WebAssembly and translated to Go source, packaged as a Go module.
@@ -170,3 +172,5 @@ Their texts are in [licenses/](licenses), and in Go as `whisperwasm.Licenses`.
 | dlmalloc, in wasi-libc | CC0 | `dlmalloc.txt` |
 | libc++, libc++abi, compiler-rt | Apache 2.0 with LLVM exceptions | `llvm.txt` |
 | wasm2go's helper functions | MIT | `wasm2go.txt` |
+
+The mascot is the Go gopher, designed by Renée French, under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
