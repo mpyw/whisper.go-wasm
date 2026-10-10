@@ -1,0 +1,86 @@
+diff --git a/ggml/src/gguf.cpp b/ggml/src/gguf.cpp
+index 75ceade..87d7594 100644
+--- a/ggml/src/gguf.cpp
++++ b/ggml/src/gguf.cpp
+@@ -435,16 +435,10 @@ template<typename T>
+ bool gguf_read_emplace_helper(const struct gguf_reader & gr, std::vector<struct gguf_kv> & kv, const std::string & key, const bool is_array, const size_t n) {
+     if (is_array) {
+         std::vector<T> value;
+-        try {
++        { // WHISPERGO: built with -fno-exceptions, so there is nothing to catch.
+             if (!gr.read(value, n)) {
+                 return false;
+             }
+-        } catch (std::length_error &) {
+-            GGML_LOG_ERROR("%s: encountered length_error while reading value for key '%s'\n", __func__, key.c_str());
+-            return false;
+-        } catch (std::bad_alloc &) {
+-            GGML_LOG_ERROR("%s: encountered bad_alloc error while reading value for key '%s'\n", __func__, key.c_str());
+-            return false;
+         }
+         kv.emplace_back(key, value);
+     } else {
+@@ -559,14 +553,8 @@ static struct gguf_context * gguf_init_from_reader(const struct gguf_reader & gr
+             bool        is_array = false;
+             uint64_t    n        = 1;
+ 
+-            try {
++            { // WHISPERGO: built with -fno-exceptions, so there is nothing to catch.
+                 ok = ok && gr.read(key);
+-            } catch (std::length_error &) {
+-                GGML_LOG_ERROR("%s: encountered length_error while reading key %" PRIi64 "\n", __func__, i);
+-                ok = false;
+-            } catch (std::bad_alloc &) {
+-                GGML_LOG_ERROR("%s: encountered bad_alloc error while reading key %" PRIi64 "\n", __func__, i);
+-                ok = false;
+             }
+             if (ok && key.empty()) {
+                 GGML_LOG_ERROR("%s: key %" PRIi64 " is empty\n", __func__, i);
+@@ -645,14 +633,8 @@ static struct gguf_context * gguf_init_from_reader(const struct gguf_reader & gr
+         // tensor name
+         {
+             std::string name;
+-            try {
++            { // WHISPERGO: built with -fno-exceptions, so there is nothing to catch.
+                 ok = ok && gr.read(name);
+-            } catch (std::length_error &) {
+-                GGML_LOG_ERROR("%s: encountered length_error while reading tensor name %" PRIi64 "\n", __func__, i);
+-                ok = false;
+-            } catch (std::bad_alloc &) {
+-                GGML_LOG_ERROR("%s: encountered bad_alloc error while reading tensor name %" PRIi64 "\n", __func__, i);
+-                ok = false;
+             }
+             if (name.length() >= GGML_MAX_NAME) {
+                 GGML_LOG_ERROR("%s: tensor name %" PRIi64 " is too long: %zu >= %d\n", __func__, i, name.length(), GGML_MAX_NAME);
+@@ -1612,7 +1594,7 @@ struct gguf_writer_file final : public gguf_writer_base {
+         const auto ret = fputc(real_val, file);
+         written_bytes++;
+         if (ret != real_val) {
+-            throw std::runtime_error("unexpected fputc result '" + std::to_string(ret) + "' instead of '" + std::to_string((int)real_val) + "'");
++            GGML_ABORT("%s", std::string("unexpected fputc result '" + std::to_string(ret) + "' instead of '" + std::to_string((int)real_val) + "'").c_str()); // WHISPERGO: built with -fno-exceptions. The trap ends the call, and the Go host recovers.
+         }
+     }
+ 
+@@ -1620,7 +1602,7 @@ struct gguf_writer_file final : public gguf_writer_base {
+         const auto ret = fwrite(val.data(), 1, val.size(), file);
+         written_bytes += val.size();
+         if (ret != val.size()) {
+-            throw std::runtime_error("unexpected fwrite number of bytes written, '" + std::to_string(ret) + "' instead of '" + std::to_string(val.size()) + "'");
++            GGML_ABORT("%s", std::string("unexpected fwrite number of bytes written, '" + std::to_string(ret) + "' instead of '" + std::to_string(val.size()) + "'").c_str()); // WHISPERGO: built with -fno-exceptions. The trap ends the call, and the Go host recovers.
+         }
+     }
+ 
+@@ -1690,12 +1672,9 @@ void gguf_write_to_buf(const struct gguf_context * ctx, std::vector<int8_t> & bu
+ bool gguf_write_to_file_ptr(const struct gguf_context * ctx, FILE * file, bool only_meta) {
+     GGML_ASSERT(file);
+ 
+-    try {
++    { // WHISPERGO: built with -fno-exceptions, so there is nothing to catch.
+         gguf_writer_file gw(file);
+         gguf_write_out(ctx, gw, only_meta);
+-    } catch (const std::runtime_error& ex) {
+-        GGML_LOG_ERROR("%s: failed to write GGUF data: %s\n", __func__, ex.what());
+-        return false;
+     }
+     return true;
+ }

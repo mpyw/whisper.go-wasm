@@ -1,0 +1,13 @@
+diff --git a/ggml/src/ggml-cpu/ggml-cpu.c b/ggml/src/ggml-cpu/ggml-cpu.c
+index 7c274c0..be27f3c 100644
+--- a/ggml/src/ggml-cpu/ggml-cpu.c
++++ b/ggml/src/ggml-cpu/ggml-cpu.c
+@@ -2825,7 +2825,7 @@ struct ggml_cplan ggml_graph_plan(
+     n_threads = 1;
+ #endif
+ 
+-#if defined(__wasi__)
++#if defined(__wasi__) && !defined(_REENTRANT) // WHISPERGO: wasi-threads (-pthread) runs graphs in parallel
+     // WASI doesn't support parallelism yet
+     n_threads = 1;
+ #endif

@@ -1,0 +1,169 @@
+diff --git a/src/whisper.cpp b/src/whisper.cpp
+index 1675f33..2eb5f0a 100644
+--- a/src/whisper.cpp
++++ b/src/whisper.cpp
+@@ -197,7 +197,9 @@ static bool ggml_graph_compute_helper(
+       ggml_backend_sched_t   sched,
+         struct ggml_cgraph * graph,
+                        int   n_threads,
+-                      bool   sched_reset = true) {
++                      bool   sched_reset = true,
++     ggml_abort_callback   abort_callback = nullptr,
++                    void * abort_callback_data = nullptr) {
+     for (int i = 0; i < ggml_backend_sched_get_n_backends(sched); ++i) {
+         ggml_backend_t backend = ggml_backend_sched_get_backend(sched, i);
+         ggml_backend_dev_t dev = ggml_backend_get_device(backend);
+@@ -207,6 +209,13 @@ static bool ggml_graph_compute_helper(
+         if (fn_set_n_threads) {
+             fn_set_n_threads(backend, n_threads);
+         }
++
++        // WHISPERGO: let ggml check abort_callback between the operations of
++        // a graph. Otherwise a canceled run went on to the end of the pass.
++        auto * fn_set_abort_callback = (ggml_backend_set_abort_callback_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_abort_callback");
++        if (fn_set_abort_callback) {
++            fn_set_abort_callback(backend, abort_callback, abort_callback_data);
++        }
+     }
+ 
+     const bool t = (ggml_backend_sched_graph_compute(sched, graph) == GGML_STATUS_SUCCESS);
+@@ -1363,7 +1372,7 @@ static std::vector<ggml_backend_t> whisper_backend_init(const whisper_context_pa
+ 
+     ggml_backend_t backend_cpu = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
+     if (backend_cpu == nullptr) {
+-        throw std::runtime_error("failed to initialize CPU backend");
++        GGML_ABORT("%s", std::string("failed to initialize CPU backend").c_str()); // WHISPERGO: built with -fno-exceptions. The trap ends the call, and the Go host recovers.
+     }
+     result.push_back(backend_cpu);
+ 
+@@ -1436,7 +1445,7 @@ static bool weight_buft_supported(const whisper_hparams & hparams, ggml_tensor *
+ 
+                 ggml_context_ptr ctx_ptr { ggml_init(params) };
+                 if (!ctx_ptr) {
+-                    throw std::runtime_error("failed to create ggml context");
++                    GGML_ABORT("%s", std::string("failed to create ggml context").c_str()); // WHISPERGO: built with -fno-exceptions. The trap ends the call, and the Go host recovers.
+                 }
+                 ggml_context * ctx = ctx_ptr.get();
+ 
+@@ -1708,7 +1717,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
+ 
+             ggml_context * ctx = ggml_init(params);
+             if (!ctx) {
+-                throw std::runtime_error("failed to create ggml context");
++                GGML_ABORT("%s", std::string("failed to create ggml context").c_str()); // WHISPERGO: built with -fno-exceptions. The trap ends the call, and the Go host recovers.
+             }
+ 
+             ctx_map[buft] = ctx;
+@@ -1727,7 +1736,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
+         ggml_op op = ASR_TENSOR_INFO.at(type);
+         ggml_backend_buffer_type_t buft = select_weight_buft(hparams, meta, op, buft_list);
+         if (!buft) {
+-            throw std::runtime_error(format("failed to find a compatible buffer type for tensor %s", ASR_TENSOR_NAMES.at(system).at(type)));
++            GGML_ABORT("%s", std::string(format("failed to find a compatible buffer type for tensor %s", ASR_TENSOR_NAMES.at(system).at(type))).c_str()); // WHISPERGO: built with -fno-exceptions. The trap ends the call, and the Go host recovers.
+         }
+ 
+         ggml_context * ctx = get_ctx(buft);
+@@ -2447,7 +2456,7 @@ static bool whisper_encode_internal(
+         }
+ 
+         if (!whisper_encode_external(wstate)) {
+-            if (!ggml_graph_compute_helper(sched, gf, n_threads)) {
++            if (!ggml_graph_compute_helper(sched, gf, n_threads, true, abort_callback, abort_callback_data)) { // WHISPERGO: see the helper
+                 return false;
+             }
+         } else {
+@@ -2491,7 +2500,7 @@ static bool whisper_encode_internal(
+             return false;
+         }
+ 
+-        if (!ggml_graph_compute_helper(sched, gf, n_threads)) {
++        if (!ggml_graph_compute_helper(sched, gf, n_threads, true, abort_callback, abort_callback_data)) { // WHISPERGO: see the helper
+             return false;
+         }
+     }
+@@ -2507,7 +2516,7 @@ static bool whisper_encode_internal(
+             return false;
+         }
+ 
+-        if (!ggml_graph_compute_helper(sched, gf, n_threads)) {
++        if (!ggml_graph_compute_helper(sched, gf, n_threads, true, abort_callback, abort_callback_data)) { // WHISPERGO: see the helper
+             return false;
+         }
+     }
+@@ -3004,7 +3013,7 @@ static bool whisper_decode_internal(
+ 
+         logits = ggml_graph_node(gf, -1);
+ 
+-        if (!ggml_graph_compute_helper(sched, gf, n_threads)) {
++        if (!ggml_graph_compute_helper(sched, gf, n_threads, true, abort_callback, abort_callback_data)) { // WHISPERGO: see the helper
+             return false;
+         }
+     }
+@@ -3835,12 +3844,8 @@ struct whisper_context * whisper_init_with_params_no_state(struct whisper_model_
+     // device/buffer allocation), so funnel any throw into the existing
+     // NULL-return failure path instead of letting it cross the C ABI.
+     bool model_loaded = false;
+-    try {
++    { // WHISPERGO: built with -fno-exceptions, so there is nothing to catch.
+         model_loaded = whisper_model_load(loader, *ctx);
+-    } catch (const std::exception & e) {
+-        WHISPER_LOG_ERROR("%s: exception during model load: %s\n", __func__, e.what());
+-    } catch (...) {
+-        WHISPER_LOG_ERROR("%s: unknown exception during model load\n", __func__);
+     }
+ 
+     if (!model_loaded) {
+@@ -4635,7 +4640,7 @@ static bool weight_buft_supported(const whisper_vad_hparams & hparams, ggml_tens
+ 
+                 ggml_context_ptr ctx_ptr { ggml_init(params) };
+                 if (!ctx_ptr) {
+-                    throw std::runtime_error("failed to create ggml context");
++                    GGML_ABORT("%s", std::string("failed to create ggml context").c_str()); // WHISPERGO: built with -fno-exceptions. The trap ends the call, and the Go host recovers.
+                 }
+                 ggml_context * ctx = ctx_ptr.get();
+ 
+@@ -5014,7 +5019,7 @@ struct whisper_vad_context * whisper_vad_init_with_params(
+ 
+             ggml_context * ctx = ggml_init(params);
+             if (!ctx) {
+-                throw std::runtime_error("failed to create ggml context");
++                GGML_ABORT("%s", std::string("failed to create ggml context").c_str()); // WHISPERGO: built with -fno-exceptions. The trap ends the call, and the Go host recovers.
+             }
+ 
+             ctx_map[buft] = ctx;
+@@ -5035,7 +5040,7 @@ struct whisper_vad_context * whisper_vad_init_with_params(
+         ggml_op op = VAD_TENSOR_OPS.at(type);
+         ggml_backend_buffer_type_t buft = select_weight_buft(hparams, meta, op, buft_list);
+         if (!buft) {
+-            throw std::runtime_error(format("failed to find a compatible buffer type for tensor %s", VAD_TENSOR_NAMES.at(type)));
++            GGML_ABORT("%s", std::string(format("failed to find a compatible buffer type for tensor %s", VAD_TENSOR_NAMES.at(type))).c_str()); // WHISPERGO: built with -fno-exceptions. The trap ends the call, and the Go host recovers.
+         }
+         ggml_context * ctx = get_ctx(buft);
+         ggml_tensor * tensor = ggml_dup_tensor(ctx, meta);
+@@ -5542,11 +5547,8 @@ struct whisper_vad_segments * whisper_vad_segments_from_probs(
+     // Allocate final segments
+     std::vector<whisper_vad_segment> segments;
+     if (speeches.size() > 0) {
+-        try {
++        { // WHISPERGO: built with -fno-exceptions, so there is nothing to catch.
+             segments.resize(speeches.size());
+-        } catch (const std::bad_alloc &) {
+-            WHISPER_LOG_ERROR("%s: failed to allocate memory for final segments\n", __func__);
+-            return nullptr;
+         }
+     }
+ 
+@@ -6878,12 +6880,8 @@ static bool whisper_vad(
+         WHISPER_LOG_INFO("%s: total duration of speech segments: %.2f seconds\n",
+                         __func__, (float)filtered_n_samples / WHISPER_SAMPLE_RATE);
+ 
+-        try {
++        { // WHISPERGO: built with -fno-exceptions, so there is nothing to catch.
+             filtered_samples.resize(total_samples_needed);
+-        } catch (const std::bad_alloc & /* e */) {
+-            WHISPER_LOG_ERROR("%s: failed to allocate memory for filtered samples\n", __func__);
+-            whisper_vad_free_segments(vad_segments);
+-            return false;
+         }
+ 
+         int offset = 0;
