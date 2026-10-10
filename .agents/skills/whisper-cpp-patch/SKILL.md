@@ -51,3 +51,4 @@ description: Change whisper.cpp for whisper.go-wasm, through patches/. Use befor
 | Moving another op to the host after v0.1.0 | With q5_1 and one thread, the host's kernels took 81% of the time. No op left in the module took above 3%: the mel spectrogram, add, the F16 copies, gelu, the logits. Each would cost an ABI change. |
 | Float32 attention in the encoder, without its casts to F16 | 1.508 s became 1.496 s with one thread, and nothing changed with 8: about 1%, for an ABI change. |
 | A persistent ggml threadpool, through `ggml_backend_cpu_set_threadpool` | A run spawns 224 threads, which cost about 1%. The pool was no faster, and took about 12% more CPU. |
+| Chunks of 48 rows, or of columns in fours | Each tile prepares y's scales for its rows, and 1500 columns split into chunks of 63, the last group of 3 padded to 4. Rows of 48 with columns in fours gained 1.4 to 2.6% over the models and thread counts, and either one alone less. |

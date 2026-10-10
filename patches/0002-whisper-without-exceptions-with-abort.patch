@@ -1,5 +1,5 @@
 diff --git a/src/whisper.cpp b/src/whisper.cpp
-index 1675f33..716af87 100644
+index 1675f33..7d4b742 100644
 --- a/src/whisper.cpp
 +++ b/src/whisper.cpp
 @@ -197,7 +197,9 @@ static bool ggml_graph_compute_helper(
@@ -71,7 +71,33 @@ index 1675f33..716af87 100644
          }
  
          ggml_context * ctx = get_ctx(buft);
-@@ -2447,7 +2457,7 @@ static bool whisper_encode_internal(
+@@ -1943,7 +1953,14 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
+ 
+             if (ggml_backend_buffer_is_host(tensor->buffer)) {
+                 // for the CPU and Metal backend, we can read directly into the tensor
++#if defined(__wasi__) // WHISPERGO: a file cut short in a tensor's data loaded, with the rest of the tensor as it was.
++                if (loader->read(loader->context, tensor->data, ggml_nbytes(tensor)) != ggml_nbytes(tensor)) {
++                    WHISPER_LOG_ERROR("%s: tensor '%s' is cut short in model file\n", __func__, name.data());
++                    return false;
++                }
++#else
+                 loader->read(loader->context, tensor->data, ggml_nbytes(tensor));
++#endif
+                 BYTESWAP_TENSOR(tensor);
+             } else {
+                 // read into a temporary buffer first, then copy to device memory
+@@ -1961,6 +1978,10 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
+         WHISPER_LOG_INFO("%s: model size    = %7.2f MB\n", __func__, total_size/1e6);
+ 
+         if (model.n_loaded == 0) {
++#if defined(__wasi__) // WHISPERGO: a file cut short before its tensors, even one of 4 bytes, loaded, and its first gw_full trapped.
++            WHISPER_LOG_ERROR("%s: ERROR no tensors loaded from model file\n", __func__);
++            return false;
++#endif
+             WHISPER_LOG_WARN("%s: WARN no tensors loaded from model file - assuming empty model for testing\n", __func__);
+         } else if (model.n_loaded != (int) model.tensors.size()) {
+             WHISPER_LOG_ERROR("%s: ERROR not all tensors loaded from model file - expected %zu, got %d\n", __func__, model.tensors.size(), model.n_loaded);
+@@ -2447,7 +2468,7 @@ static bool whisper_encode_internal(
          }
  
          if (!whisper_encode_external(wstate)) {
@@ -80,7 +106,7 @@ index 1675f33..716af87 100644
                  return false;
              }
          } else {
-@@ -2491,7 +2501,7 @@ static bool whisper_encode_internal(
+@@ -2491,7 +2512,7 @@ static bool whisper_encode_internal(
              return false;
          }
  
@@ -89,7 +115,7 @@ index 1675f33..716af87 100644
              return false;
          }
      }
-@@ -2507,7 +2517,7 @@ static bool whisper_encode_internal(
+@@ -2507,7 +2528,7 @@ static bool whisper_encode_internal(
              return false;
          }
  
@@ -98,7 +124,7 @@ index 1675f33..716af87 100644
              return false;
          }
      }
-@@ -3004,7 +3014,7 @@ static bool whisper_decode_internal(
+@@ -3004,7 +3025,7 @@ static bool whisper_decode_internal(
  
          logits = ggml_graph_node(gf, -1);
  
@@ -107,7 +133,7 @@ index 1675f33..716af87 100644
              return false;
          }
      }
-@@ -3164,7 +3174,39 @@ static void fft(float* in, int N, float* out) {
+@@ -3164,7 +3185,39 @@ static void fft(float* in, int N, float* out) {
      }
  }
  
@@ -148,7 +174,7 @@ index 1675f33..716af87 100644
                                                int n_samples, int frame_size, int frame_step, int n_threads,
                                                const whisper_filters & filters, whisper_mel & mel) {
      std::vector<float> fft_in(frame_size * 2, 0.0);
-@@ -3178,6 +3220,11 @@ static void log_mel_spectrogram_worker_thread(int ith, const float * hann, const
+@@ -3178,6 +3231,11 @@ static void log_mel_spectrogram_worker_thread(int ith, const float * hann, const
  
      // calculate FFT only when fft_in are not all zero
      for (; i < std::min(n_samples / frame_step + 1, mel.n_len); i += n_threads) {
@@ -160,7 +186,7 @@ index 1675f33..716af87 100644
          const int offset = i * frame_step;
  
          // apply Hann window (~10% faster)
-@@ -3252,27 +3299,23 @@ static bool log_mel_spectrogram(
+@@ -3252,27 +3310,23 @@ static bool log_mel_spectrogram(
      int64_t stage_1_pad = WHISPER_SAMPLE_RATE * 30;
      int64_t stage_2_pad = frame_size / 2;
  
@@ -195,7 +221,7 @@ index 1675f33..716af87 100644
      mel.data.resize(mel.n_mel * mel.n_len);
  
      {
-@@ -3835,12 +3878,8 @@ struct whisper_context * whisper_init_with_params_no_state(struct whisper_model_
+@@ -3835,12 +3889,8 @@ struct whisper_context * whisper_init_with_params_no_state(struct whisper_model_
      // device/buffer allocation), so funnel any throw into the existing
      // NULL-return failure path instead of letting it cross the C ABI.
      bool model_loaded = false;
@@ -209,7 +235,7 @@ index 1675f33..716af87 100644
      }
  
      if (!model_loaded) {
-@@ -4635,7 +4674,7 @@ static bool weight_buft_supported(const whisper_vad_hparams & hparams, ggml_tens
+@@ -4635,7 +4685,7 @@ static bool weight_buft_supported(const whisper_vad_hparams & hparams, ggml_tens
  
                  ggml_context_ptr ctx_ptr { ggml_init(params) };
                  if (!ctx_ptr) {
@@ -218,7 +244,7 @@ index 1675f33..716af87 100644
                  }
                  ggml_context * ctx = ctx_ptr.get();
  
-@@ -5014,7 +5053,7 @@ struct whisper_vad_context * whisper_vad_init_with_params(
+@@ -5014,7 +5064,7 @@ struct whisper_vad_context * whisper_vad_init_with_params(
  
              ggml_context * ctx = ggml_init(params);
              if (!ctx) {
@@ -227,7 +253,7 @@ index 1675f33..716af87 100644
              }
  
              ctx_map[buft] = ctx;
-@@ -5035,7 +5074,7 @@ struct whisper_vad_context * whisper_vad_init_with_params(
+@@ -5035,7 +5085,7 @@ struct whisper_vad_context * whisper_vad_init_with_params(
          ggml_op op = VAD_TENSOR_OPS.at(type);
          ggml_backend_buffer_type_t buft = select_weight_buft(hparams, meta, op, buft_list);
          if (!buft) {
@@ -236,7 +262,7 @@ index 1675f33..716af87 100644
          }
          ggml_context * ctx = get_ctx(buft);
          ggml_tensor * tensor = ggml_dup_tensor(ctx, meta);
-@@ -5542,11 +5581,8 @@ struct whisper_vad_segments * whisper_vad_segments_from_probs(
+@@ -5542,11 +5592,8 @@ struct whisper_vad_segments * whisper_vad_segments_from_probs(
      // Allocate final segments
      std::vector<whisper_vad_segment> segments;
      if (speeches.size() > 0) {
@@ -249,7 +275,7 @@ index 1675f33..716af87 100644
          }
      }
  
-@@ -6878,12 +6914,8 @@ static bool whisper_vad(
+@@ -6878,12 +6925,8 @@ static bool whisper_vad(
          WHISPER_LOG_INFO("%s: total duration of speech segments: %.2f seconds\n",
                          __func__, (float)filtered_n_samples / WHISPER_SAMPLE_RATE);
  
@@ -263,7 +289,7 @@ index 1675f33..716af87 100644
          }
  
          int offset = 0;
-@@ -6989,6 +7021,23 @@ int whisper_full_with_state(
+@@ -6989,6 +7032,23 @@ int whisper_full_with_state(
          }
      }
  
@@ -287,7 +313,7 @@ index 1675f33..716af87 100644
      // auto-detect language if not specified
      if (params.language == nullptr || strlen(params.language) == 0 || strcmp(params.language, "auto") == 0 || params.detect_language) {
          std::vector<float> probs(whisper_lang_max_id() + 1, 0.0f);
-@@ -7007,6 +7056,8 @@ int whisper_full_with_state(
+@@ -7007,6 +7067,8 @@ int whisper_full_with_state(
          }
          state->lang_id = lang_id;
          params.language = whisper_lang_str(lang_id);
@@ -296,7 +322,7 @@ index 1675f33..716af87 100644
  
          WHISPER_LOG_INFO("%s: auto-detected language: %s (p = %f)\n", __func__, params.language, probs[whisper_lang_id(params.language)]);
          if (params.detect_language) {
-@@ -7212,7 +7263,9 @@ int whisper_full_with_state(
+@@ -7212,7 +7274,9 @@ int whisper_full_with_state(
          }
  
          // encode audio features starting at offset seek
@@ -307,7 +333,7 @@ index 1675f33..716af87 100644
              WHISPER_LOG_ERROR("%s: failed to encode\n", __func__);
              return -6;
          }
-@@ -7318,6 +7371,7 @@ int whisper_full_with_state(
+@@ -7318,6 +7382,7 @@ int whisper_full_with_state(
                      WHISPER_LOG_DEBUG("%s: recreating KV cache: n_decoders_cur = %d\n", __func__, n_decoders_cur);
  
                      whisper_kv_cache_free(state->kv_self);
@@ -315,7 +341,7 @@ index 1675f33..716af87 100644
  
                      // overallocate to workaround KV cache fragmentation issues
                      const int factor = n_decoders_cur > 1 ? n_decoders_cur + 2 : 1;
-@@ -7327,7 +7381,19 @@ int whisper_full_with_state(
+@@ -7327,7 +7392,19 @@ int whisper_full_with_state(
                                  ctx->model.hparams.n_text_layer,
                                  GGML_PAD(ctx->model.hparams.n_text_ctx, 256)*factor)) {
                          WHISPER_LOG_ERROR("%s: whisper_kv_cache_init() failed for self-attention cache\n", __func__);
