@@ -96,6 +96,8 @@ ggml spends most of its time in matrix products, softmax and the quantization of
 For column `c` and row `r`, the host writes a float32 to `ds[c] + 4*r`.
 It is the dot product of `n` values: of the row at `xs[c] + r*bx`, and of the column at `ys[c]`.
 Columns of the same matrix have the same `xs[c]`, so the host can unpack each row once for them.
+Q8_0 and Q8_1 columns all come from `gw_quantize_row`, since whisper.cpp never multiplies by a quantized tensor from the model.
+Their values are within ±127, never -128, and a host may count on it, as whisper.go's int16 sums do.
 
 The blocks are ggml's, in `ggml/src/ggml-common.h`.
 A host may sum in any order, as ggml's own SIMD code does.
