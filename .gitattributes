@@ -1,0 +1,3 @@
+# Built by scripts/build.sh. Release tags carry them, so that using the package needs only Go.
+module.go linguist-generated
+version.go linguist-generated
